@@ -1,9 +1,8 @@
+extern int pwm_with_pwm_init(void);
+extern int pwm_with_pwm_project(void);
 
-
-/**
- * main.c
- */
 int main(void)
 {
-	return 0;
+    pwm_with_pwm_init();
+    pwm_with_pwm_project();
 }

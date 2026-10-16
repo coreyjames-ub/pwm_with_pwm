@@ -11,6 +11,7 @@
 	.global fpu_init
 	.global str2float
 	.global init_pwm_rgp
+	.global enable_pwm_out
 
 ;BASE
 base_clock: 		.word 0x400FE000
@@ -57,10 +58,16 @@ CPACR:				.equ 0xD88
 GPIOAFSEL:			.equ 0x420
 pwm_clock_gating:	.equ 0x640
 pwm2genb:			.equ 0xE4
+pwm3gena:			.equ 0x120
+pwm3genb:			.equ 0x124
 pwm2load:			.equ 0x0D0
+pwm3load:			.equ 0x110
 pwm2cmpb:			.equ 0x0DC
+pwm3cmpb:			.equ 0x11C
+pwm3cmpa:			.equ 0x118
 pwm5en:				.equ 0x8
-pwmenable:			.equ 0x0C0
+pwmenablegen2:		.equ 0x0C0
+pwmenablegen3:		.equ 0x100
 rcc_offset:			.equ 0x60
 
 hundred:			.equ 0xFFFF
@@ -84,58 +91,85 @@ init_pwm_rgp:
 
 	; select gpio port for alt func
 	LDR r0, base_gpio_F			; setting up r0 with base address for gpio f
-	MOV r1, #0x2				; pin 1
+	MOV r1, #0xE				; pins 1-3
 	BL enable_gpioafsel
 
-	; set pwm as alt func
+	; set pwm as alt func via GPIO Port Control
 	LDR r0, base_gpio_F
-	MOV r1, #0x50			; funtion is 5 for pwm
+	MOVW r1, #0x5550			; funtion is 5 for pwm
 	BL select_alt_func
 
 	; set gpio pins 1-3 as digital
-	LDR r4, base_gpio_F			; store base address for port F into r0
-	LDR r5, [r4, #GPIODEN] 		; offset the port F base address with GPIODEN
-	ORR r5, r5, #0x2  			; 0xE = 1110, masking for bits 1-3 .... 2 for now!
-	STR r5, [r4, #GPIODEN] 		; store activated bits back in gpioden memory
+	LDR r0, base_gpio_F			; store base address for port F into r0
+	MOV r1, #0xE  			; 0xE = 1110, masking for bits 1-3
+	BL set_gpio_pins_digital
 
 	; connect clock to pwm
-	LDR r4, base_rcgcpwm
-	LDRB r5, [r4, #pwm_clock_gating]
-	ORR r5, r5, #0x2					; or it with 2 to enable
-	STRB r5, [r4, #pwm_clock_gating]
+	MOV r0, #0x2					; or it with 2 to enable PWM MODULE 1
+	BL enable_pwm_clock_gpio
 
 	; use the pwm clock divisor ... set both the usepwmdiv and the pwmdiv amount
-	LDR r6, [r4, #rcc_offset]				; load data from rcc with usepwmdiv offset
-	MOV r5, #0xF
-	BFI r6, r5, #17, #4
-	STR r6, [r4, #rcc_offset]				; store the data back
+	MOV r0, #1
+	BL set_pwm_clock_div
+	MOV r0, #7
+	BL config_pwm_clock_div
 
 	; configure pwm generator
 	; set action for when counter reaches zero ....drive low for compare ... drive high for zero
-	LDR r4, base_pwm_1
-	LDR r5, [r4, #pwm2genb]
-	ORR r5, r5, #0x800				; drive high
-	ORR r5, r5, #3
-	STR r5, [r4, #pwm2genb]
-
+	; PF1 ... 	M1PWM5 ... PWM2GENB
+	MOV r0, #pwm2genb
+	MOV r1, #0x800
+	MOV r2, #3
+	BL config_pwm_gen
+	; PF2 ... M1PWM6 ... PWM3GENA
+	MOV r0, #pwm3gena
+	MOV r1, #0x800
+	MOV r2, #3
+	BL config_pwm_gen
+	; PF3 ... M1PWM7 ... PWM3GENB
+	MOV r0, #pwm3genb
+	MOV r1, #0x800
+	MOV r2, #3
+	BL config_pwm_gen
 
 	; set the load value
-	MOV r5, #hundred
-	STRH r5, [r4, #pwm2load]
+	; PWM GEN 2
+	MOV r0, #pwm2load
+	MOV r1, #hundred
+	BL set_pwm_load
+	; PWM GEN 3
+	MOV r0, #pwm3load
+	MOV r1, #hundred
+	BL set_pwm_load
 
 	; set the compare value
-	MOV r5, #fifty
-	STRH r5, [r4, #pwm2cmpb]
+	; PWM GEN 2 B
+	MOV r0, #pwm2cmpb
+	MOV r1, #fifty
+	BL set_pwm_compare
+	; PWM GEN 3 B
+	MOV r0, #pwm3cmpb
+	MOV r1, #fifty
+	BL set_pwm_compare
+	; PWM GEN 3 A
+	MOV r0, #pwm3cmpa
+	MOV r1, #fifty
+	BL set_pwm_compare
 
 	; connect pwm output ... configure enable
-	LDR r5, [r4, #pwm5en]
-	ORR r5, r5, #0x20
-	STR r5, [r4, #pwm5en]
+	MOV r0, #pwm5en
+	MOV r1, #0xE0
+	BL connect_pwm_out
 
 	; pwm enable enable
-	LDR r5, [r4, #pwmenable]
-	ORR r5, r5, #1
-	STR r5, [r4, #pwmenable]
+	; Gen 2
+	MOV r0, #pwmenablegen2
+	MOV r1, #0
+	BL enable_pwm_out
+	; Gen 3
+	MOV r0, #pwmenablegen3
+	MOV r1, #0
+	BL enable_pwm_out
 
 	POP {r4-r10,lr}  			; Restore registers from stack
 	MOV pc, lr
@@ -500,12 +534,168 @@ select_alt_func:
 	PUSH {r4-r8, lr}
 	MOV r4, r0					; move port address into r4
 	MOV r5, r1					; move pin field into r5
-	LDRB r7, [r4, #GPIOPCTL]			; store the data
+	LDR r7, [r4, #GPIOPCTL]			; store the data
 	ORR r7, r7, r5
-	STRB r7, [r4, #GPIOPCTL]
+	STR r7, [r4, #GPIOPCTL]
 
 	POP {r4-r8, lr}
 	MOV pc, lr
+
+; ************************ Select GPIO Pins Digital ************************** ;
+; ARGS: 				r0: Port Base Address 		r1: Pins to Set
+; Return:				N/A
+set_gpio_pins_digital:
+	PUSH {r4-r8, lr}
+	MOV r4, r0					; move port address into r4
+	MOV r5, r1					; move pin field into r5
+	LDR r7, [r4, #GPIODEN]			; store the data
+	ORR r7, r7, r5
+	STR r7, [r4, #GPIODEN]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+; ************************ Connect Clock to PWM ************************** ;
+; ARGS: 				r0: PWM Moduel
+; Return:				N/A
+enable_pwm_clock_gpio:
+	PUSH {r4-r8, lr}
+	MOV r6, r0
+	LDR r4, base_rcgcpwm
+	LDRB r5, [r4, #pwm_clock_gating]
+	ORR r5, r5, r6					; or with the arg from r0
+	STRB r5, [r4, #pwm_clock_gating]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+
+
+; ************************ Set PWM Clock Divisor ************************** ;
+; ARGS: 				r0: Pick Divisor 	0: System 	1: PWM Clock Divisor
+; Return:				N/A
+set_pwm_clock_div:
+	PUSH {r4-r8, lr}
+	MOV r5, r0
+	; use the pwm clock divisor ... set both the usepwmdiv and the pwmdiv amount
+	LDR r4, base_rcgcpwm
+	LDR r6, [r4, #rcc_offset]				; load data from rcc with usepwmdiv offset
+	BFI r6, r5, #20, #1
+	STR r6, [r4, #rcc_offset]				; store the data back
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+; ************************ Configure PWM Clock Divisor ************************** ;
+; ARGS: 				r0: Divisor Value
+; Return:				N/A
+config_pwm_clock_div:
+	PUSH {r4-r8, lr}
+	MOV r5, r0
+	; use the pwm clock divisor ... set both the usepwmdiv and the pwmdiv amount
+	LDR r4, base_rcgcpwm
+	LDR r6, [r4, #rcc_offset]				; load data from rcc with usepwmdiv offset
+	BFI r6, r5, #17, #3
+	STR r6, [r4, #rcc_offset]				; store the data back
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+
+
+; ************************ Configure PWM Generator ************************** ;
+; ARGS: 				r0: Offset		r1: action for counter value reaches zero		r2: action for counter value reaches compare
+; Return:				N/A
+config_pwm_gen:
+	PUSH {r4-r8, lr}
+	MOV r6, r0				; move offset into r6
+	MOV r7, r1				; move zero action into r7
+	MOV r8, r2				; move compare action into r8
+
+	; configure pwm generator
+	; set action for when counter reaches zero ....drive low for compare ... drive high for zero
+	LDR r4, base_pwm_1
+	LDR r5, [r4, r6]
+	ORR r5, r5, r1				; drive high *** look into ORR
+	ORR r5, r5, r2
+	STR r5, [r4, r6]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+; ************************ Set PWM Load Value ************************** ;
+; ARGS: 				r0: Offset		r1: load value
+; Return:				N/A
+set_pwm_load:
+	PUSH {r4-r8, lr}
+	MOV r6, r0					; move offset val into r6
+	MOV r5, r1					; move load val into r5
+	; set the load value
+	LDR r4, base_pwm_1
+	STRH r5, [r4, r6]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+; ************************ Set PWM Compare Value ************************** ;
+; ARGS: 				r0: Offset		r1: compare value
+; Return:				N/A
+set_pwm_compare:
+	PUSH {r4-r8, lr}
+	MOV r6, r0					; move offset val into r6
+	MOV r5, r1					; move compare val into r5
+	; set the load value
+	LDR r4, base_pwm_1
+	STRH r5, [r4, r6]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+
+; ************************ Connect PWM Output ************************** ;
+; ARGS: 				r0: Offset		r1: output enable bit
+; Return:				N/A
+connect_pwm_out:
+	PUSH {r4-r8, lr}
+	MOV r6, r0
+	MOV r7, r1
+	; connect pwm output ... configure enable
+	LDR r4, base_pwm_1
+	LDR r5, [r4, r6]
+	ORR r5, r5, r7
+	STR r5, [r4, r6]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
+; ************************ Enable PWM Output ************************** ;
+; ARGS: 				r0: Offset		r1: enable bit
+; Return:				N/A
+enable_pwm_out:
+	PUSH {r4-r8, lr}
+	MOV r6, r0
+	MOV r7, r1
+	; pwm enable enable
+	LDR r4, base_pwm_1
+	LDR r5, [r4, r6]
+	CMP r1, #1
+	BEQ set_pwm_out
+	BNE clear_pwm_out
+
+set_pwm_out:
+	ORR r5, r5, r7
+	B store_pwm_out
+
+clear_pwm_out:
+	AND r5, r5, #0xE
+	B store_pwm_out
+
+store_pwm_out:
+	STR r5, [r4, r6]
+
+	POP {r4-r8, lr}
+	MOV pc, lr
+
 
 ; ************************ Enable Module Clock *************************** ;
 ; ARGS:		r0: module offset		r1: port bit

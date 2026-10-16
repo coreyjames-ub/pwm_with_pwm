@@ -1,17 +1,17 @@
 ******************************************************************************
                   TI ARM Linker Unix v20.2.7                   
 ******************************************************************************
->> Linked Wed Oct 14 17:37:50 2026
+>> Linked Fri Oct 16 15:37:04 2026
 
 OUTPUT FILE NAME:   <pwm_with_pwm_modules_lab.out>
-ENTRY POINT SYMBOL: "_c_int00_noargs"  address: 00000be1
+ENTRY POINT SYMBOL: "_c_int00_noargs"  address: 00000cad
 
 
 MEMORY CONFIGURATION
 
          name            origin    length      used     unused   attr    fill
 ----------------------  --------  ---------  --------  --------  ----  --------
-  FLASH                 00000000   00040000  00000d50  0003f2b0  R  X
+  FLASH                 00000000   00040000  00000e1c  0003f1e4  R  X
   SRAM                  20000000   00008000  00000431  00007bcf  RW X
 
 
@@ -19,10 +19,10 @@ SEGMENT ALLOCATION MAP
 
 run origin  load origin   length   init length attrs members
 ----------  ----------- ---------- ----------- ----- -------
-00000000    00000000    00000d54   00000d54    r-x
+00000000    00000000    00000e1c   00000e1c    r-x
   00000000    00000000    0000026c   0000026c    r-- .intvecs
-  0000026c    0000026c    000009d8   000009d8    r-x .text
-  00000c48    00000c48    0000010c   0000010c    r-- .cinit
+  0000026c    0000026c    00000aa4   00000aa4    r-x .text
+  00000d10    00000d10    0000010c   0000010c    r-- .cinit
 20000000    20000000    00000438   00000000    rw-
   20000000    20000000    00000231   00000000    rw- .data
   20000238    20000238    00000200   00000000    rw- .stack
@@ -36,25 +36,25 @@ section   page    origin      length       input sections
 .intvecs   0    00000000    0000026c     
                   00000000    0000026c     tm4c123gh6pm_startup_ccs.obj (.intvecs)
 
-.text      0    0000026c    000009d8     
-                  0000026c    00000472     pwm_with_pwm_modules_library.obj (.text)
-                  000006de    00000002     --HOLE-- [fill = 0]
-                  000006e0    000003b8     pwm_with_pwm_modules.obj (.text)
-                  00000a98    0000009c     rtsv7M4_T_le_v4SPD16_eabi.lib : memcpy_t2.asm.obj (.text)
-                  00000b34    00000068                                   : copy_decompress_lzss.c.obj (.text:decompress:lzss:__TI_decompress_lzss)
-                  00000b9c    00000044                                   : autoinit.c.obj (.text:__TI_auto_init_nobinit_nopinit:__TI_auto_init_nobinit_nopinit)
-                  00000be0    00000034                                   : boot_cortex_m.c.obj (.text:_c_int00_noargs:_c_int00_noargs)
-                  00000c14    0000000e                                   : copy_decompress_none.c.obj (.text:decompress:none:__TI_decompress_none)
-                  00000c22    0000000e     pwm_with_pwm_modules_wrapper.obj (.text)
-                  00000c30    0000000c     tm4c123gh6pm_startup_ccs.obj (.text)
-                  00000c3c    00000004     rtsv7M4_T_le_v4SPD16_eabi.lib : pre_init.c.obj (.text:_system_pre_init)
-                  00000c40    00000004                                   : exit.c.obj (.text:abort:abort)
+.text      0    0000026c    00000aa4     
+                  0000026c    000005b2     pwm_with_pwm_modules_library.obj (.text)
+                  0000081e    00000002     --HOLE-- [fill = 0]
+                  00000820    00000344     pwm_with_pwm_modules.obj (.text)
+                  00000b64    0000009c     rtsv7M4_T_le_v4SPD16_eabi.lib : memcpy_t2.asm.obj (.text)
+                  00000c00    00000068                                   : copy_decompress_lzss.c.obj (.text:decompress:lzss:__TI_decompress_lzss)
+                  00000c68    00000044                                   : autoinit.c.obj (.text:__TI_auto_init_nobinit_nopinit:__TI_auto_init_nobinit_nopinit)
+                  00000cac    00000034                                   : boot_cortex_m.c.obj (.text:_c_int00_noargs:_c_int00_noargs)
+                  00000ce0    0000000e                                   : copy_decompress_none.c.obj (.text:decompress:none:__TI_decompress_none)
+                  00000cee    0000000e     pwm_with_pwm_modules_wrapper.obj (.text)
+                  00000cfc    0000000c     tm4c123gh6pm_startup_ccs.obj (.text)
+                  00000d08    00000004     rtsv7M4_T_le_v4SPD16_eabi.lib : pre_init.c.obj (.text:_system_pre_init)
+                  00000d0c    00000004                                   : exit.c.obj (.text:abort:abort)
 
-.cinit     0    00000c48    0000010c     
-                  00000c48    000000f9     (.cinit..data.load) [load image, compression = lzss]
-                  00000d41    00000003     --HOLE-- [fill = 0]
-                  00000d44    00000008     (__TI_handler_table)
-                  00000d4c    00000008     (__TI_cinit_table)
+.cinit     0    00000d10    0000010c     
+                  00000d10    000000f9     (.cinit..data.load) [load image, compression = lzss]
+                  00000e09    00000003     --HOLE-- [fill = 0]
+                  00000e0c    00000008     (__TI_handler_table)
+                  00000e14    00000008     (__TI_cinit_table)
 
 .init_array 
 *          0    00000000    00000000     UNINITIALIZED
@@ -74,12 +74,12 @@ MODULE SUMMARY
        Module                             code   ro data   rw data
        ------                             ----   -------   -------
     ./
-       pwm_with_pwm_modules.obj           952    0         561    
-       pwm_with_pwm_modules_library.obj   1138   0         0      
+       pwm_with_pwm_modules_library.obj   1458   0         0      
+       pwm_with_pwm_modules.obj           836    0         561    
        tm4c123gh6pm_startup_ccs.obj       12     620       0      
        pwm_with_pwm_modules_wrapper.obj   14     0         0      
     +--+----------------------------------+------+---------+---------+
-       Total:                             2116   620       561    
+       Total:                             2320   620       561    
                                                                   
     /Applications/ti/ccs1281/ccs/tools/compiler/ti-cgt-arm_20.2.7.LTS/lib/rtsv7M4_T_le_v4SPD16_eabi.lib
        memcpy_t2.asm.obj                  156    0         0      
@@ -95,18 +95,18 @@ MODULE SUMMARY
        Stack:                             0      0         512    
        Linker Generated:                  0      265       0      
     +--+----------------------------------+------+---------+---------+
-       Grand Total:                       2518   885       1073   
+       Grand Total:                       2722   885       1073   
 
 
 LINKER GENERATED COPY TABLES
 
-__TI_cinit_table @ 00000d4c records: 1, size/record: 8, table size: 8
-	.data: load addr=00000c48, load size=000000f9 bytes, run addr=20000000, run size=00000231 bytes, compression=lzss
+__TI_cinit_table @ 00000e14 records: 1, size/record: 8, table size: 8
+	.data: load addr=00000d10, load size=000000f9 bytes, run addr=20000000, run size=00000231 bytes, compression=lzss
 
 
 LINKER GENERATED HANDLER TABLE
 
-__TI_handler_table @ 00000d44 records: 2, size/record: 4, table size: 8
+__TI_handler_table @ 00000e0c records: 2, size/record: 4, table size: 8
 	index: 0, handler: __TI_decompress_lzss
 	index: 1, handler: __TI_decompress_none
 
@@ -115,55 +115,55 @@ GLOBAL SYMBOLS: SORTED ALPHABETICALLY BY Name
 
 address   name                          
 -------   ----                          
-00000533  ALICE_KEYPAD_init             
-00000c41  C$$EXIT                       
-00000455  RGB_init                      
-00000c31  ResetISR                      
-00000a79  Timer_Handler                 
-00000a5f  UART0_Handler                 
+00000583  ALICE_KEYPAD_init             
+00000d0d  C$$EXIT                       
+000004a5  RGB_init                      
+00000cfd  ResetISR                      
+00000b4b  UART0_Handler                 
 20000438  __STACK_END                   
 00000200  __STACK_SIZE                  
 20000438  __STACK_TOP                   
-00000d4c  __TI_CINIT_Base               
-00000d54  __TI_CINIT_Limit              
-00000d44  __TI_Handler_Table_Base       
-00000d4c  __TI_Handler_Table_Limit      
-00000b9d  __TI_auto_init_nobinit_nopinit
-00000b35  __TI_decompress_lzss          
-00000c15  __TI_decompress_none          
+00000e14  __TI_CINIT_Base               
+00000e1c  __TI_CINIT_Limit              
+00000e0c  __TI_Handler_Table_Base       
+00000e14  __TI_Handler_Table_Limit      
+00000c69  __TI_auto_init_nobinit_nopinit
+00000c01  __TI_decompress_lzss          
+00000ce1  __TI_decompress_none          
 ffffffff  __TI_pprof_out_hndl           
 ffffffff  __TI_prof_data_size           
 ffffffff  __TI_prof_data_start          
 00000000  __TI_static_base__            
-00000a99  __aeabi_memcpy                
-00000a99  __aeabi_memcpy4               
-00000a99  __aeabi_memcpy8               
+00000b65  __aeabi_memcpy                
+00000b65  __aeabi_memcpy4               
+00000b65  __aeabi_memcpy8               
 ffffffff  __binit__                     
 ffffffff  __c_args__                    
 UNDEFED   __mpu_init                    
 20000238  __stack                       
 20000000  __start___llvm_prf_cnts       
 20000000  __stop___llvm_prf_cnts        
-00000be1  _c_int00_noargs               
+00000cad  _c_int00_noargs               
 UNDEFED   _system_post_cinit            
-00000c3d  _system_pre_init              
-00000c41  abort                         
+00000d09  _system_pre_init              
+00000d0d  abort                         
 ffffffff  binit                         
-000003c5  fpu_init                      
+00000703  enable_pwm_out                
+00000415  fpu_init                      
 00000000  g_pfnVectors                  
-000004e5  gpio_interrupt_init           
-00000493  illuminate_RGB_LED            
+00000535  gpio_interrupt_init           
+000004e3  illuminate_RGB_LED            
 00000295  init_pwm_rgp                  
-00000c23  main                          
-00000a99  memcpy                        
-000004b3  output_character              
-000004cd  output_string                 
-00000751  pwm_with_pwm_init             
-0000077b  pwm_with_pwm_project          
-00000333  str2float                     
-000003eb  timer_interrupt_init          
-00000647  uart_init                     
-00000621  uart_interrupt_init           
+00000cef  main                          
+00000b65  memcpy                        
+00000503  output_character              
+0000051d  output_string                 
+0000088d  pwm_with_pwm_init             
+000008a5  pwm_with_pwm_project          
+00000383  str2float                     
+0000043b  timer_interrupt_init          
+00000787  uart_init                     
+00000761  uart_interrupt_init           
 
 
 GLOBAL SYMBOLS: SORTED BY Symbol Address 
@@ -174,38 +174,38 @@ address   name
 00000000  g_pfnVectors                  
 00000200  __STACK_SIZE                  
 00000295  init_pwm_rgp                  
-00000333  str2float                     
-000003c5  fpu_init                      
-000003eb  timer_interrupt_init          
-00000455  RGB_init                      
-00000493  illuminate_RGB_LED            
-000004b3  output_character              
-000004cd  output_string                 
-000004e5  gpio_interrupt_init           
-00000533  ALICE_KEYPAD_init             
-00000621  uart_interrupt_init           
-00000647  uart_init                     
-00000751  pwm_with_pwm_init             
-0000077b  pwm_with_pwm_project          
-00000a5f  UART0_Handler                 
-00000a79  Timer_Handler                 
-00000a99  __aeabi_memcpy                
-00000a99  __aeabi_memcpy4               
-00000a99  __aeabi_memcpy8               
-00000a99  memcpy                        
-00000b35  __TI_decompress_lzss          
-00000b9d  __TI_auto_init_nobinit_nopinit
-00000be1  _c_int00_noargs               
-00000c15  __TI_decompress_none          
-00000c23  main                          
-00000c31  ResetISR                      
-00000c3d  _system_pre_init              
-00000c41  C$$EXIT                       
-00000c41  abort                         
-00000d44  __TI_Handler_Table_Base       
-00000d4c  __TI_CINIT_Base               
-00000d4c  __TI_Handler_Table_Limit      
-00000d54  __TI_CINIT_Limit              
+00000383  str2float                     
+00000415  fpu_init                      
+0000043b  timer_interrupt_init          
+000004a5  RGB_init                      
+000004e3  illuminate_RGB_LED            
+00000503  output_character              
+0000051d  output_string                 
+00000535  gpio_interrupt_init           
+00000583  ALICE_KEYPAD_init             
+00000703  enable_pwm_out                
+00000761  uart_interrupt_init           
+00000787  uart_init                     
+0000088d  pwm_with_pwm_init             
+000008a5  pwm_with_pwm_project          
+00000b4b  UART0_Handler                 
+00000b65  __aeabi_memcpy                
+00000b65  __aeabi_memcpy4               
+00000b65  __aeabi_memcpy8               
+00000b65  memcpy                        
+00000c01  __TI_decompress_lzss          
+00000c69  __TI_auto_init_nobinit_nopinit
+00000cad  _c_int00_noargs               
+00000ce1  __TI_decompress_none          
+00000cef  main                          
+00000cfd  ResetISR                      
+00000d09  _system_pre_init              
+00000d0d  C$$EXIT                       
+00000d0d  abort                         
+00000e0c  __TI_Handler_Table_Base       
+00000e14  __TI_CINIT_Base               
+00000e14  __TI_Handler_Table_Limit      
+00000e1c  __TI_CINIT_Limit              
 20000000  __start___llvm_prf_cnts       
 20000000  __stop___llvm_prf_cnts        
 20000238  __stack                       

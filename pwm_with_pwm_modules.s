@@ -40,18 +40,14 @@ green_str:			.string "000",0
 	.global UART0_Handler
 	.global uart_interrupt_init
 	.global uart_init
-	.global output_string
 	.global pwm_with_pwm_init
 	.global pwm_with_pwm_project
 	.global output_string
 	.global output_character
-	.global RGB_init
-	.global illuminate_RGB_LED
-	.global timer_interrupt_init
-	.global Timer_Handler
 	.global fpu_init
 	.global str2float
 	.global init_pwm_rgp
+	.global enable_pwm_out
 
 ; PTRS
 ptr_hundred_Hz:			.word hundred_Hz
@@ -82,7 +78,6 @@ ptr_half_sec:			.word half_sec
 
 ; BASE ADDR
 base_UART0:						.word 0x4000C000
-base_timer_0:					.word 0x40030000
 base_gpio_F: 					.word 0x40025000
 
 
@@ -100,6 +95,7 @@ LETTER_Q:			.equ 0x71
 LETTER_M:			.equ 0x6D
 enable_GPIO: 		.equ 0x608
 port_f:				.equ 0x20
+pwmenablegen2:		.equ 0x0C0
 
 
 
@@ -112,19 +108,7 @@ pwm_with_pwm_init:
 	BL uart_interrupt_init
 	BL init_pwm_rgp
 
-	MOV r5, #0
-my_loop:
-	CMP r5, #1
-	BNE my_loop
-
-
-
-
 	BL fpu_init
-	; set interrupt timer to 1600
-	LDR r0, ptr_hundred_Hz
-	LDR r0, [r0]
-	BL timer_interrupt_init 	; initialize timer
 
 	POP {r4-r6, lr}
 	MOV pc, lr
@@ -149,8 +133,9 @@ pwm_with_pwm_project:
 main_menu:
 
 	; TURN OFF RGB LED
-	MOV r0, #0x0			; clear the rgb led
-	BL illuminate_RGB_LED	; turn it off
+	MOV r0, #pwmenablegen2
+	MOV r1, #0
+	BL enable_pwm_out
 
 	; CLEAR THE USER INPUT AND SCREEN
 	STRB r6, [r4]				; clear and store the user input ... zero
@@ -173,15 +158,19 @@ wait_main:
 blinky:
 
 	; Clear user input and screen
-	STRB r6, [r4]				; store the user input
+;	STRB r6, [r4]				; store the user input
 	BL clear_screen				; clear the screen
+	MOV r0, #pwmenablegen2
+	MOV r1, #1
+	BL enable_pwm_out
+
 
 	; CLEAR BIG COUNT ... SET BLINK FLAG ... TURN ON LED
-	STR r6, [r7]				; store zero in big count
-	MOV r0, #1					; move 1 into r0
-	STRB r0, [r11]				; store 1 into blink flag
-	MOV r0, #2					; turn rgb led to red
-	BL illuminate_RGB_LED
+;	STR r6, [r7]				; store zero in big count
+;	MOV r0, #1					; move 1 into r0
+;	STRB r0, [r11]				; store 1 into blink flag
+;	MOV r0, #2					; turn rgb led to red
+;	BL illuminate_RGB_LED
 
 	; SHOW THE BLINKY PROMPT
 	LDR r0, ptr_exit_blinky_mode
@@ -191,28 +180,28 @@ wait_blinky:
 	LDRB r5, [r4]				; load user input
 	CMP r5, #LETTER_M			; compare it to the letter m
 	BEQ main_menu				; go back to main menu if equal
-	LDR r5, [r7]				; load the big count
-	CMP r5, r10			; compare big count to half a sec
-	BGE blink_light				; if equal branch to blink light
+;	LDR r5, [r7]				; load the big count
+;	CMP r5, r10			; compare big count to half a sec
+;	BGE blink_light				; if equal branch to blink light
 	B wait_blinky				; else loop blinky again
 
-blink_light:
-	LDRB r5, [r11]				; look at blink flag
-	CMP r5, #0
-	BEQ blink_on
-	MOV r0, #0
-	BL illuminate_RGB_LED
-	STRB r6, [r11]				; clear the Blink flag
-	STR r6, [r7]				; clear big count
-	B wait_blinky
+;blink_light:
+;	LDRB r5, [r11]				; look at blink flag
+;	CMP r5, #0
+;	BEQ blink_on
+;	MOV r0, #0
+;	BL illuminate_RGB_LED
+;	STRB r6, [r11]				; clear the Blink flag
+;	STR r6, [r7]				; clear big count
+;	B wait_blinky
 
-blink_on:
-	MOV r0, #2					; turn the led red
-	BL illuminate_RGB_LED
-	MOV r0, #1					; set blink flag to a 1
-	STRB r0, [r11]
-	STR r6, [r7]				; clear big count
-	B wait_blinky
+;blink_on:
+;	MOV r0, #2					; turn the led red
+;	BL illuminate_RGB_LED
+;	MOV r0, #1					; set blink flag to a 1
+;	STRB r0, [r11]
+;	STR r6, [r7]				; clear big count
+;	B wait_blinky
 
 advanced_rgb_led:
 
@@ -223,7 +212,7 @@ advanced_rgb_led:
 
 	; Turn off RGB
 	MOV r0, #0x0			; clear the rgb led
-	BL illuminate_RGB_LED	; turn it off
+;	BL illuminate_RGB_LED	; turn it off
 
 	; Clear rgb duty
 	LDR r0, ptr_red_duty
@@ -407,7 +396,7 @@ set_adv_rgb:
 	ADDGE r6, r6, #4
 
 	MOV r0, r6
-	BL illuminate_RGB_LED
+;	BL illuminate_RGB_LED
 
 	POP {r4-r12, lr}
 	MOV pc, lr
@@ -516,49 +505,4 @@ done_UART:
 	POP {r4-r7}
 	BX lr       	; Return
 
-; *********** TIMER HANDLER ************                                           ************* COREY ***********
-
-Timer_Handler:
-; lecture says r0-r3, r12, pc and lr are all preserved automatically within handler
-	PUSH {r4-r11}
-
-; clear interrupt
-	LDR r4, base_timer_0					; Load the base address to general purpose timer
-	MOV r5, #0x1 						; set pin 0 to clear interrupt
-	STR r5, [r4, #GPTMICR]					; set the pins in memory
-
-	; load big count and increment
-	LDR r6, ptr_big_count
-	LDR r7, [r6]
-	ADD r7, r7, #1
-	STR r7, [r6]
-
-exit_timer:
-	POP {r4-r11}
-	BX lr       	; Return
-
-
 	.end
-
-
-	; cool math that i dont need anymore
-	; get clock hz ... 16MHz per second ... s3 as a float
-	;LDR r0, ptr_clock_Hz			; load pointer to clock HZ
-	;LDR r0, [r0]				; load actual 16MHz
-	;VMOV s3, r0					; move the clock hz into s3
-	;VCVT.F32.S32 s3, s3			; converts from integer to float
-	; I need 100 in s1
-;	MOV r1, #100				; move 100 into r1
-;	VMOV s1, r1					; move 100 into s1 ... float!
-;	VCVT.F32.S32 s1, s1			; converts from integer to float
-;	; I need the percent value in s0
-;	MOV r0, #50					; move 50 into r0 ... bc we want red 50 % of the time ... 1/2 a second
-;	VMOV s0, r0					; move 50 into s0 ... float!
-;	VCVT.F32.S32 s0, s0			; converts from integer to float
-;	VDIV.F32 s0, s0, s1			; divide percent in s0 by 100 in s1
-;	; Multiply the percent now as decimal by the clock hz ... then convert to 32 bit int ... then vmov it into core reg
-;	VMUL.F32 s0, s0, s3
-;	VCVTR.S32.F32 s0, s0				; convert from float to int
-;	VMOV r0, s0							; move from float reg to core reg
-;
-;	BL timer_interrupt_init 	; initialize timer

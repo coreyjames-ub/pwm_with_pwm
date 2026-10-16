@@ -12,6 +12,9 @@
 	.global str2float
 	.global init_pwm_rgp
 	.global enable_pwm_out
+	.global connect_pwm_out
+	.global set_pwm_load
+	.global set_pwm_compare
 
 ;BASE
 base_clock: 		.word 0x400FE000
@@ -123,7 +126,7 @@ init_pwm_rgp:
 	BL config_pwm_gen
 	; PF2 ... M1PWM6 ... PWM3GENA
 	MOV r0, #pwm3gena
-	MOV r1, #0x800
+	MOV r1, #0x80
 	MOV r2, #3
 	BL config_pwm_gen
 	; PF3 ... M1PWM7 ... PWM3GENB
@@ -158,7 +161,7 @@ init_pwm_rgp:
 
 	; connect pwm output ... configure enable
 	MOV r0, #pwm5en
-	MOV r1, #0xE0
+	MOV r1, #0x7
 	BL connect_pwm_out
 
 	; pwm enable enable
@@ -662,7 +665,7 @@ connect_pwm_out:
 	; connect pwm output ... configure enable
 	LDR r4, base_pwm_1
 	LDR r5, [r4, r6]
-	ORR r5, r5, r7
+	BFI r5, r7, #5, #3
 	STR r5, [r4, r6]
 
 	POP {r4-r8, lr}
@@ -678,7 +681,7 @@ enable_pwm_out:
 	; pwm enable enable
 	LDR r4, base_pwm_1
 	LDR r5, [r4, r6]
-	CMP r1, #1
+	CMP r7, #1
 	BEQ set_pwm_out
 	BNE clear_pwm_out
 

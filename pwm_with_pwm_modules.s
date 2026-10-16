@@ -48,6 +48,9 @@ green_str:			.string "000",0
 	.global str2float
 	.global init_pwm_rgp
 	.global enable_pwm_out
+	.global connect_pwm_out
+	.global set_pwm_load
+	.global set_pwm_compare
 
 ; PTRS
 ptr_hundred_Hz:			.word hundred_Hz
@@ -96,6 +99,16 @@ LETTER_M:			.equ 0x6D
 enable_GPIO: 		.equ 0x608
 port_f:				.equ 0x20
 pwmenablegen2:		.equ 0x0C0
+pwmenablegen3:		.equ 0x100
+pwm2load:			.equ 0x0D0
+pwm3load:			.equ 0x110
+pwm2cmpb:			.equ 0x0DC
+pwm3cmpb:			.equ 0x11C
+pwm3cmpa:			.equ 0x118
+pwm5en:				.equ 0x008
+
+hundred:			.equ 0xFFFF
+fifty:				.equ 0x7FFF
 
 
 
@@ -133,7 +146,16 @@ pwm_with_pwm_project:
 main_menu:
 
 	; TURN OFF RGB LED
+	; connect pwm output ... configure enable
+	MOV r0, #pwm5en
+	MOV r1, #0x0								; red: #0x1		green: #0x2		blue: #0x4 ... all 3 is 7
+	BL connect_pwm_out
+
 	MOV r0, #pwmenablegen2
+	MOV r1, #0
+	BL enable_pwm_out
+
+	MOV r0, #pwmenablegen3
 	MOV r1, #0
 	BL enable_pwm_out
 
@@ -158,19 +180,45 @@ wait_main:
 blinky:
 
 	; Clear user input and screen
-;	STRB r6, [r4]				; store the user input
 	BL clear_screen				; clear the screen
+
+	; set the load value
+	; PWM GEN 2
+	MOV r0, #pwm2load
+	MOV r1, #hundred
+	BL set_pwm_load
+	; PWM GEN 3
+	MOV r0, #pwm3load
+	MOV r1, #hundred
+	BL set_pwm_load
+
+	; set the compare value
+	; PWM GEN 2 B
+	MOV r0, #pwm2cmpb
+	MOV r1, #fifty
+	BL set_pwm_compare
+	; PWM GEN 3 B
+	MOV r0, #pwm3cmpb
+	MOV r1, #fifty
+	BL set_pwm_compare
+	; PWM GEN 3 A
+	MOV r0, #pwm3cmpa
+	MOV r1, #fifty
+	BL set_pwm_compare
+
+	; connect pwm output ... configure enable
+	MOV r0, #pwm5en
+	MOV r1, #0x4								; red: #0x1		blue: #0x2		green: #0x4 ... all 3 is 7
+	BL connect_pwm_out
+
 	MOV r0, #pwmenablegen2
-	MOV r1, #1
+	MOV r1, #0
 	BL enable_pwm_out
 
-
-	; CLEAR BIG COUNT ... SET BLINK FLAG ... TURN ON LED
-;	STR r6, [r7]				; store zero in big count
-;	MOV r0, #1					; move 1 into r0
-;	STRB r0, [r11]				; store 1 into blink flag
-;	MOV r0, #2					; turn rgb led to red
-;	BL illuminate_RGB_LED
+	; Gen 3
+	MOV r0, #pwmenablegen3
+	MOV r1, #1
+	BL enable_pwm_out
 
 	; SHOW THE BLINKY PROMPT
 	LDR r0, ptr_exit_blinky_mode
@@ -180,28 +228,7 @@ wait_blinky:
 	LDRB r5, [r4]				; load user input
 	CMP r5, #LETTER_M			; compare it to the letter m
 	BEQ main_menu				; go back to main menu if equal
-;	LDR r5, [r7]				; load the big count
-;	CMP r5, r10			; compare big count to half a sec
-;	BGE blink_light				; if equal branch to blink light
 	B wait_blinky				; else loop blinky again
-
-;blink_light:
-;	LDRB r5, [r11]				; look at blink flag
-;	CMP r5, #0
-;	BEQ blink_on
-;	MOV r0, #0
-;	BL illuminate_RGB_LED
-;	STRB r6, [r11]				; clear the Blink flag
-;	STR r6, [r7]				; clear big count
-;	B wait_blinky
-
-;blink_on:
-;	MOV r0, #2					; turn the led red
-;	BL illuminate_RGB_LED
-;	MOV r0, #1					; set blink flag to a 1
-;	STRB r0, [r11]
-;	STR r6, [r7]				; clear big count
-;	B wait_blinky
 
 advanced_rgb_led:
 

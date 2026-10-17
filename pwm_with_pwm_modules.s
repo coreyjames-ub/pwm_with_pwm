@@ -51,6 +51,9 @@ green_str:			.string "000",0
 	.global connect_pwm_out
 	.global set_pwm_load
 	.global set_pwm_compare
+	.global mod
+	.global config_pwm_clock_div
+	.global config_pwm_gen
 
 ; PTRS
 ptr_hundred_Hz:			.word hundred_Hz
@@ -106,6 +109,9 @@ pwm2cmpb:			.equ 0x0DC
 pwm3cmpb:			.equ 0x11C
 pwm3cmpa:			.equ 0x118
 pwm5en:				.equ 0x008
+pwm2genb:			.equ 0xE4
+pwm3gena:			.equ 0x120
+pwm3genb:			.equ 0x124
 
 hundred:			.equ 0xFFFF
 fifty:				.equ 0x7FFF
@@ -146,6 +152,9 @@ pwm_with_pwm_project:
 main_menu:
 
 	; TURN OFF RGB LED
+	BL reg_red
+	BL reg_green
+	BL reg_blue
 	; connect pwm output ... configure enable
 	MOV r0, #pwm5en
 	MOV r1, #0x0								; red: #0x1		green: #0x2		blue: #0x4 ... all 3 is 7
@@ -180,7 +189,12 @@ wait_main:
 blinky:
 
 	; Clear user input and screen
+	STRB r6, [r4]				; clear and store the user input ... zero
 	BL clear_screen				; clear the screen
+
+	; set clock divisor to divide by 64
+	MOV r0, #7
+	BL config_pwm_clock_div
 
 	; set the load value
 	; PWM GEN 2
@@ -237,10 +251,6 @@ advanced_rgb_led:
 	STRB r6, [r9]					; clear color flag
 	BL clear_screen				; clear the screen
 
-	; Turn off RGB
-	MOV r0, #0x0			; clear the rgb led
-;	BL illuminate_RGB_LED	; turn it off
-
 	; Clear rgb duty
 	LDR r0, ptr_red_duty
 	STR r6, [r0]
@@ -261,7 +271,7 @@ red_wait:
 	ITTT GT							; if it is greater than zero
 	MOVGT r0, r5			; set arg1 to user input				1
 	MOVGT r1, #1			; set arg2 to color flag to red			2
-	BGT show_keys			; use show_keys sub_routine				3
+	BLGT show_keys			; use show_keys sub_routine				3
 	B red_wait				; start loop again
 
 green_prep:
@@ -282,7 +292,7 @@ green_wait:
 	ITTT GT							; if it is greater than zero
 	MOVGT r0, r5			; set arg1 to user input				1
 	MOVGT r1, #2			; set arg2 to color flag to green		2
-	BGT show_keys			; use show_keys sub_routine				3
+	BLGT show_keys			; use show_keys sub_routine				3
 	B green_wait				; start loop again
 
 blue_prep:
@@ -303,7 +313,7 @@ blue_wait:
 	ITTT GT							; if it is greater than zero
 	MOVGT r0, r5			; set arg1 to user input				1
 	MOVGT r1, #3			; set arg2 to color flag to blue		2
-	BGT show_keys			; use show_keys sub_routine				3
+	BLGT show_keys			; use show_keys sub_routine				3
 	B blue_wait				; start loop again
 
 adv_rgb_prep:
@@ -312,7 +322,7 @@ adv_rgb_prep:
 	LDR r8, ptr_blue_str
 	LDRB r0, [r9]					; load color flag count into r0
 	STRB r6, [r8, r0]				; null terminate green str
-	STRB r6, [r9]					; clear color flag
+	STRB r6, [r9]					; clear color flag					???
 
 	; prep 255 in s7
 	MOV r0, #255
@@ -371,6 +381,114 @@ adv_rgb_prep:
 	LDR r0, ptr_big_count
 	STR r6, [r7]				; clear cycle count
 
+	; disable the pwm generators
+	MOV r0, #pwmenablegen2
+	MOV r1, #0
+	BL enable_pwm_out
+	MOV r0, #pwmenablegen3
+	MOV r1, #0
+	BL enable_pwm_out
+
+	; reset the clock divisor ... need to do this with blinky too
+	; divide by 16
+	MOV r0, #3
+	BL config_pwm_clock_div
+
+	; reset the load ... need to do this with blinky too
+	; load is 100
+	; set the load value
+	; PWM GEN 2
+	MOV r0, #pwm2load
+	MOV r1, #0x64
+	BL set_pwm_load
+	; PWM GEN 3
+	MOV r0, #pwm3load
+	MOV r1, #0x64
+	BL set_pwm_load
+
+	; set the compares ... set this up with blinky too
+	; account for on and off channels
+	; compares are the respective duty cycle
+	; set the compare value
+	; PWM GEN 2 B
+	MOV r5, #0
+
+	MOV r0, #pwm2cmpb
+	LDR r1, ptr_red_duty
+	LDR r1, [r1]
+	CMP r1, #0
+	IT NE
+	ADDNE r5, r5, #1
+	CMP r1, #100
+	IT GE
+	MOVGE r1, #99					; if its 100 offset the compare and load by a little bit
+	BL set_pwm_compare
+	; we have to check if its on 100%
+	LDR r1, ptr_red_duty
+	LDR r1, [r1]
+	CMP r1, #0x64
+	ITE GE
+	BLGE always_red
+	BLLT reg_red
+	; PWM GEN 3 B
+	MOV r0, #pwm3cmpb
+	LDR r1, ptr_green_duty
+	LDR r1, [r1]
+	CMP r1, #0
+	IT NE
+	ADDNE r5, r5, #4
+	CMP r1, #100
+	IT GE
+	MOVGE r1, #99					; if its 100 offset the compare and load by a little bit
+	BL set_pwm_compare
+	LDR r1, ptr_green_duty
+	LDR r1, [r1]
+	CMP r1, #0x64
+	ITE GE
+	BLGE always_green
+	BLLT reg_green
+	; PWM GEN 3 A
+	MOV r0, #pwm3cmpa
+	LDR r1, ptr_blue_duty
+	LDR r1, [r1]
+	CMP r1, #0
+	IT NE
+	ADDNE r5, r5, #2
+	CMP r1, #100
+	IT GE
+	MOVGE r1, #99 			; if its 100 offset the compare and load by a little bit
+	BL set_pwm_compare
+	LDR r1, ptr_blue_duty
+	LDR r1, [r1]
+	CMP r1, #0x64
+	ITE GE
+	BLGE always_blue
+	BLLT reg_blue
+
+	; check if the duty cycle is greater than zero and then enable output
+	; connect pwm output ... configure enable
+	MOV r0, #pwm5en
+	MOV r1, r5
+	BL connect_pwm_out
+
+	; check if duty cycle is greater than zero and enable the generator ... use mod
+	MOV r1, r5
+	MOV r0, #2
+	BL mod
+	CMP r0, #1
+	ITE EQ
+	MOVEQ r1, #1
+	MOVNE r1, #0
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+
+	CMP r5, #1
+	ITE GT
+	MOVGT r1, #1
+	MOVLE r1, #0
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+
 
 	; do str to float for each color
 	; do math for each color and set them value / 255 * 100 = round it ... integer it ... store it
@@ -381,52 +499,102 @@ adv_rgb_loop:
 	BEQ advanced_rgb_led
 	CMP r5, #LETTER_M
 	BEQ main_menu
-	BL set_adv_rgb
 	B adv_rgb_loop
 
 done_proj:
 	POP {r4-r12,lr}
 	MOV pc, lr
 
-; ************************* ADV RGB SUB ROUTINE *************************
-; ARGS:				N/A
-; RETURN VAL:		N/A
-; ***********************************************************************
-set_adv_rgb:
-	PUSH {r4-r12, lr}
+; ******************************************* ALWAYS RED ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+always_red:
+	PUSH {r4-r8, lr}
 
-	MOV r6, #0
+	; PF1 ... 	M1PWM5 ... PWM2GENB
+	MOV r0, #pwm2genb
+	MOV r1, #0xC00
+	MOV r2, #3
+	BL config_pwm_gen
 
-	LDR r4, ptr_big_count
-	LDR r5, [r4]				; load cyle count into r5
-	ADD r5, r5, #1				; add 1 to cycle count
-	CMP r5, #100				; compare to 100
-	IT EQ						; if its equal store zero to cycle count
-	STRBEQ r6, [r4]
-
-	LDR r7, ptr_red_duty
-	LDRB r8, [r7]				; get the red duty val in r8
-	CMP r8, r5
-	IT GE
-	ADDGE r6, r6, #2
-
-	LDR r7, ptr_green_duty
-	LDR r8, [r7]				; get the green duty val in r8
-	CMP r8, r5
-	IT GE
-	ADDGE r6, r6, #8
-
-	LDR r7, ptr_blue_duty
-	LDR r8, [r7]				; get the blue duty val in r11
-	CMP r8, r5
-	IT GE
-	ADDGE r6, r6, #4
-
-	MOV r0, r6
-;	BL illuminate_RGB_LED
-
-	POP {r4-r12, lr}
+	POP {r4-r8,lr}
 	MOV pc, lr
+
+; ******************************************* REG RED ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+reg_red:
+	PUSH {r4-r8, lr}
+
+	; PF1 ... 	M1PWM5 ... PWM2GENB
+	MOV r0, #pwm2genb
+	MOV r1, #0xC00
+	MOV r2, #2
+	BL config_pwm_gen
+
+	POP {r4-r8,lr}
+	MOV pc, lr
+
+; ******************************************* ALWAYS GREEN ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+always_green:
+	PUSH {r4-r8, lr}
+
+	; PF3 ... M1PWM7 ... PWM3GENB
+	MOV r0, #pwm3genb
+	MOV r1, #0xC00
+	MOV r2, #3
+	BL config_pwm_gen
+
+	POP {r4-r8,lr}
+	MOV pc, lr
+
+; ******************************************* REG GREEN ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+reg_green:
+	PUSH {r4-r8, lr}
+
+	; PF3 ... M1PWM7 ... PWM3GENB
+	MOV r0, #pwm3genb
+	MOV r1, #0xC00
+	MOV r2, #2
+	BL config_pwm_gen
+
+	POP {r4-r8,lr}
+	MOV pc, lr
+
+; ******************************************* ALWAYS BLUE ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+always_blue:
+	PUSH {r4-r8, lr}
+
+	; PF2 ... M1PWM6 ... PWM3GENA
+	MOV r0, #pwm3gena
+	MOV r1, #0xC0
+	MOV r2, #3
+	BL config_pwm_gen
+
+	POP {r4-r8,lr}
+	MOV pc, lr
+
+; ******************************************* REG BLUE ****************************************************
+; ARGS:			N/A
+; RETURN:		N/A
+reg_blue:
+	PUSH {r4-r8, lr}
+
+	; PF2 ... M1PWM6 ... PWM3GENA
+	MOV r0, #pwm3gena
+	MOV r1, #0xC0
+	MOV r2, #2
+	BL config_pwm_gen
+
+	POP {r4-r8,lr}
+	MOV pc, lr
+
 
 ; *****************************************
 ; ARGS:			R0: ASCII CHARACTER				R1: COLOR FLAG: 1 = RED, 2 = GREEN, 3 = BLUE

@@ -15,6 +15,9 @@
 	.global connect_pwm_out
 	.global set_pwm_load
 	.global set_pwm_compare
+	.global mod
+	.global config_pwm_clock_div
+	.global config_pwm_gen
 
 ;BASE
 base_clock: 		.word 0x400FE000
@@ -72,6 +75,7 @@ pwm5en:				.equ 0x8
 pwmenablegen2:		.equ 0x0C0
 pwmenablegen3:		.equ 0x100
 rcc_offset:			.equ 0x60
+prpwm:				.equ 0xA40
 
 hundred:			.equ 0xFFFF
 fifty:				.equ 0x7FFF
@@ -111,6 +115,11 @@ init_pwm_rgp:
 	MOV r0, #0x2					; or it with 2 to enable PWM MODULE 1
 	BL enable_pwm_clock_gpio
 
+	; wait for clock to be ready
+	MOV r0, #prpwm
+	MOV r1, #0x2
+	BL check_peripheral_ready
+
 	; use the pwm clock divisor ... set both the usepwmdiv and the pwmdiv amount
 	MOV r0, #1
 	BL set_pwm_clock_div
@@ -118,21 +127,21 @@ init_pwm_rgp:
 	BL config_pwm_clock_div
 
 	; configure pwm generator
-	; set action for when counter reaches zero ....drive low for compare ... drive high for zero
+	; set action for when counter reaches zero ....drive high for compare ... drive low for zero
 	; PF1 ... 	M1PWM5 ... PWM2GENB
 	MOV r0, #pwm2genb
-	MOV r1, #0x800
-	MOV r2, #3
+	MOV r1, #0xC00
+	MOV r2, #2
 	BL config_pwm_gen
 	; PF2 ... M1PWM6 ... PWM3GENA
 	MOV r0, #pwm3gena
-	MOV r1, #0x80
-	MOV r2, #3
+	MOV r1, #0xC0
+	MOV r2, #2
 	BL config_pwm_gen
 	; PF3 ... M1PWM7 ... PWM3GENB
 	MOV r0, #pwm3genb
-	MOV r1, #0x800
-	MOV r2, #3
+	MOV r1, #0xC00
+	MOV r2, #2
 	BL config_pwm_gen
 
 	; set the load value
@@ -620,7 +629,7 @@ config_pwm_gen:
 	LDR r4, base_pwm_1
 	LDR r5, [r4, r6]
 	ORR r5, r5, r1				; drive high *** look into ORR
-	ORR r5, r5, r2
+	BFI r5, r2, #0, #2
 	STR r5, [r4, r6]
 
 	POP {r4-r8, lr}
@@ -690,7 +699,7 @@ set_pwm_out:
 	B store_pwm_out
 
 clear_pwm_out:
-	AND r5, r5, #0xE
+	BIC r5, r5, #0x1
 	B store_pwm_out
 
 store_pwm_out:
@@ -827,5 +836,42 @@ uart_init:
 
 	POP {r4-r12,lr}  			; Restore registers from stack
 	MOV pc, lr
+
+
+; ************************* MOD ***************************** ;
+
+mod:
+	PUSH {r4-r12,lr}  ; Store registers r4 through r12 and lr on the
+	                  ; stack. Do NOT modify this line of code.  It
+	                  ; ensures that the return address is preserved
+	                  ; so that a proper return to the C wrapped can be
+	                  ; executed.
+
+	MOV r4, r0			; copy of divisor in r4
+	MOV r5, r1			; copy of dividend in r5
+	MOV r6, #0			; move zero into r6
+
+	UDIV r6, r5, r4
+
+	MUL r7, r6, r4
+
+	SUB r0, r5, r7
+
+
+
+MOD_DONE:
+
+
+
+	POP {r4-r12,lr}  ; Restore registers r4 through r12 and lr from
+	                 ; the stack. Do NOT modify this line of code.
+	                 ; It ensures that the return address is preserved
+	                 ; so that a proper return to the C wrapped can be
+	                 ; executed.
+
+	; The following line is used to return from the subroutine
+	; and should be the last line in your subroutine.
+
+	MOV pc, lr     			; stop
 
 	.end

@@ -10,7 +10,7 @@
 	.global timer_interrupt_init
 	.global fpu_init
 	.global str2float
-	.global init_pwm_rgp
+	.global init_pwm_rgb
 	.global enable_pwm_out
 	.global connect_pwm_out
 	.global set_pwm_load
@@ -18,6 +18,7 @@
 	.global mod
 	.global config_pwm_clock_div
 	.global config_pwm_gen
+	.global timer_interrupt_init
 
 ;BASE
 base_clock: 		.word 0x400FE000
@@ -82,7 +83,7 @@ fifty:				.equ 0x7FFF
 
 ; ****************************************************** INIT PWM FOR RGB *************************************************************
 
-init_pwm_rgp:
+init_pwm_rgb:
 	PUSH {r4-r10,lr}			; Spill registers to stack
 
 	; enable gpio port f with pwm

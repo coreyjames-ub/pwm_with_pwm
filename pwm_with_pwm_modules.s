@@ -1,21 +1,13 @@
 	.data
 ; DATA SECTION
-
-; Hertz
-clock_Hz: 						.word 0x00F42400 	; 16,000,000
-hundred_Hz:						.word 0x00000640 	; 1,600
+; VARS
 red_duty:						.word 0x00
 green_duty:						.word 0x00
 blue_duty:						.word 0x00
-big_count:						.word 0x00
-half_sec:						.word 0x00001388
-
-; VARS
-cycle_count:		.byte 0x00
-usr_input:			.byte 0x00
-color_flag:			.byte 0x00
-blink_flag:			.byte 0x00
-
+int_spd:						.word 0x003D0900
+usr_input:						.byte 0x00
+color_flag:						.byte 0x00
+wheel_flag:						.byte 0x00
 ; INSTRUCTION STRINGS
 blinky_or_color:	.string "***** PRESS <b> TO ENTER BLINK_MODE, PRESS <c> TO ENTER COLOR_MODE, OR PRESS <q> TO QUIT *****",0x0D, 0x0A,0
 exit_blinky_mode:	.string	"***** PRESS <m> TO RETURN TO THE MAIN MENU *****",0x0D, 0x0A,0
@@ -33,7 +25,6 @@ red_str:			.string "000",0
 blue_str:			.string "000",0
 green_str:			.string "000",0
 
-
 	.text
 ; TEXT SECTION
 
@@ -46,7 +37,7 @@ green_str:			.string "000",0
 	.global output_character
 	.global fpu_init
 	.global str2float
-	.global init_pwm_rgp
+	.global init_pwm_rgb
 	.global enable_pwm_out
 	.global connect_pwm_out
 	.global set_pwm_load
@@ -54,10 +45,11 @@ green_str:			.string "000",0
 	.global mod
 	.global config_pwm_clock_div
 	.global config_pwm_gen
+	.global Timer_Handler
+	.global timer_interrupt_init
 
 ; PTRS
-ptr_hundred_Hz:			.word hundred_Hz
-ptr_cycle_count:		.word cycle_count
+
 ptr_blinky_or_color:		.word blinky_or_color
 ptr_exit_blinky_mode:	.word exit_blinky_mode
 ptr_exit_color_mode:		.word exit_color_mode
@@ -71,20 +63,19 @@ ptr_color_flag:			.word color_flag
 ptr_delete_char:		.word delete_char
 ptr_curs_home:			.word curs_home
 ptr_clr_screen: 		.word clr_screen
-ptr_clock_Hz: 			.word clock_Hz
 ptr_red_duty:			.word red_duty
 ptr_green_duty:			.word green_duty
 ptr_blue_duty:			.word blue_duty
 ptr_red_str:			.word red_str
 ptr_blue_str:			.word blue_str
 ptr_green_str:			.word green_str
-ptr_big_count:			.word big_count
-ptr_blink_flag:			.word blink_flag
-ptr_half_sec:			.word half_sec
+ptr_wheel_flag:			.word wheel_flag
+ptr_int_spd:			.word int_spd
 
 ; BASE ADDR
 base_UART0:						.word 0x4000C000
 base_gpio_F: 					.word 0x40025000
+base_timer_0:					.word 0x40030000
 
 
 ; OFFSETS
@@ -116,6 +107,8 @@ pwm3genb:			.equ 0x124
 hundred:			.equ 0xFFFF
 fifty:				.equ 0x7FFF
 
+LETTER_W:			.equ 0x77
+
 
 
 
@@ -125,7 +118,7 @@ pwm_with_pwm_init:
 
 	BL uart_init
 	BL uart_interrupt_init
-	BL init_pwm_rgp
+	BL init_pwm_rgb
 
 	BL fpu_init
 
@@ -141,13 +134,9 @@ pwm_with_pwm_project:
 	LDR r4, ptr_usr_input					; base address to user input in R4
 	MOV r5, #0								; Mutable Data
 	MOV r6, #0								; keep zero in r6
-	LDR r7, ptr_big_count					; base addres to BIG COUNT
 	MOV r8, #0								; base address for color strings
 	LDR r9, ptr_color_flag					; color count flag
-	LDR r10, ptr_half_sec
-	LDR r10, [r10]							; half sec VALUE
-	LDR r11, ptr_blink_flag					; ptr to blink flag
-	LDR r12, ptr_cycle_count				; pointer to cycle count
+
 
 main_menu:
 
@@ -155,7 +144,8 @@ main_menu:
 	BL reg_red
 	BL reg_green
 	BL reg_blue
-	; connect pwm output ... configure enable
+
+	; disconnect pwm output ... configure disabel
 	MOV r0, #pwm5en
 	MOV r1, #0x0								; red: #0x1		green: #0x2		blue: #0x4 ... all 3 is 7
 	BL connect_pwm_out
@@ -184,6 +174,8 @@ wait_main:
 	BEQ advanced_rgb_led		; IF C BREAK TO ADV RGB
 	CMP r5, #LETTER_Q			; COMPARE TO Q
 	BEQ done_proj				; IF Q BREAK TO DONE
+	CMP r5, #LETTER_W			; compare to w
+	BEQ color_wheel
 	B wait_main					; LOOP
 
 blinky:
@@ -222,16 +214,16 @@ blinky:
 
 	; connect pwm output ... configure enable
 	MOV r0, #pwm5en
-	MOV r1, #0x4								; red: #0x1		blue: #0x2		green: #0x4 ... all 3 is 7
+	MOV r1, #0x1								; red: #0x1		blue: #0x2		green: #0x4 ... all 3 is 7
 	BL connect_pwm_out
 
 	MOV r0, #pwmenablegen2
-	MOV r1, #0
+	MOV r1, #1
 	BL enable_pwm_out
 
 	; Gen 3
 	MOV r0, #pwmenablegen3
-	MOV r1, #1
+	MOV r1, #0
 	BL enable_pwm_out
 
 	; SHOW THE BLINKY PROMPT
@@ -376,11 +368,7 @@ adv_rgb_prep:
 	LDR r0, ptr_exit_color_mode		; load green instruction	2
 	BL output_string				; show the instruction		3
 
-	; prep everything and make sure we are reset and ready to count
-
-	LDR r0, ptr_big_count
-	STR r6, [r7]				; clear cycle count
-
+set_adv_rgb_with_pwm:
 	; disable the pwm generators
 	MOV r0, #pwmenablegen2
 	MOV r1, #0
@@ -611,6 +599,7 @@ show_keys:
 	IT EQ
 	LDREQ r7, ptr_blue_str
 
+
 	LDR r5, ptr_color_flag	; load the color count
 	LDRB r6, [r5]
 
@@ -672,6 +661,274 @@ clear_screen:
     POP {r4, lr}
 	MOV pc, lr
 
+; **************** COLOR WHEEL
+color_wheel:
+	PUSH {r4-r8, lr}
+
+	LDR r0, ptr_int_spd
+	LDR r0, [r0]
+	BL timer_interrupt_init 	; initialize timer *** VERIFY THIS ... TESTING
+
+	; Vars
+	LDR r4, ptr_usr_input
+	MOV r5, #0
+	LDR r6, ptr_wheel_flag
+
+	; Clear user input and screen
+	STRB r5, [r4]				; clear and store the user input ... zero
+	BL clear_screen				; clear the screen
+
+	; set up the pwms
+	; disable the pwm generators
+	MOV r0, #pwmenablegen2
+	MOV r1, #0
+	BL enable_pwm_out
+	MOV r0, #pwmenablegen3
+	MOV r1, #0
+	BL enable_pwm_out
+
+	; reset the clock divisor ... need to do this with blinky too
+	; divide by 16
+	MOV r0, #3
+	BL config_pwm_clock_div
+
+	; reset the load ... need to do this with blinky too
+	; load is 100
+	; set the load value
+	; PWM GEN 2
+	MOV r0, #pwm2load
+	MOV r1, #0x64
+	BL set_pwm_load
+	; PWM GEN 3
+	MOV r0, #pwm3load
+	MOV r1, #0x64
+	BL set_pwm_load
+
+	MOV r4, #99
+	LDR r5, ptr_red_duty
+	STR r4, [r5]
+
+	MOV r4, #0
+	LDR r5, ptr_green_duty
+	STR r4, [r5]
+
+	MOV r4, #0
+	LDR r5, ptr_blue_duty
+	STR r4, [r5]
+
+	; start:	 			red: 100%		green: 0%		blue: 0%
+red_start:
+	; now load the red duty
+	MOV r1, #99
+	MOV r0, #pwm2cmpb
+	LDR r2, ptr_red_duty
+	STR r1, [r2]
+	BL set_pwm_compare
+red_yellow:
+	; first load the green duty vale and compare to 99
+	LDR r3, ptr_green_duty
+	LDR r1, [r3]
+	CMP r1, #99
+	BEQ yellow_green			; if 100 then branch to next segment
+	; else load the green compare value here
+	ADD r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm3cmpb
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #5					; we want to connect red (1) and green (4)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_red_yellow:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ red_yellow
+	B wait_red_yellow
+
+	; transition to:	 	red: 100%		green: 100%		blue: 0%
+yellow_green:
+	; first load the red duty vale and compare to 1
+	LDR r3, ptr_red_duty
+	LDR r1, [r3]
+	CMP r1, #1
+	BEQ green_cyan			; if 0 then branch to next segment
+	; else load the red compare value here
+	SUB r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm2cmpb
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #5					; we want to connect red (1) and green (4)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_yellow_green:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ yellow_green
+	B wait_yellow_green
+
+	; transition to:	 	red: 0%			green: 100%		blue: 0%
+green_cyan:
+	; first load the blue duty vale and compare to 99
+	LDR r3, ptr_blue_duty
+	LDR r1, [r3]
+	CMP r1, #99
+	BEQ cyan_blue			; if 100 then branch to next segment
+	; else load the blue compare value here
+	ADD r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm3cmpa
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #6					; we want to connect blue (2) and green (4)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #0
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_green_cyan:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ green_cyan
+	B wait_green_cyan
+	; transition to:	 	red: 0%			green: 100%		blue: 100%
+cyan_blue:
+	; first load the blue duty vale and compare to 1
+	LDR r3, ptr_green_duty
+	LDR r1, [r3]
+	CMP r1, #1
+	BEQ blue_purple			; if 100 then branch to next segment
+	; else load the blue compare value here
+	SUB r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm3cmpb
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #6					; we want to connect blue (2) and green (4)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #0
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_cyan_blue:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ cyan_blue
+	B wait_cyan_blue
+	; transition to:	 	red: 0%			green: 0%		blue: 100%
+blue_purple:
+	; first load the red duty vale and compare to 99
+	LDR r3, ptr_red_duty
+	LDR r1, [r3]
+	CMP r1, #99
+	BEQ purple_red			; if 100 then branch to next segment
+	; else load the blue compare value here
+	ADD r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm2cmpb
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #3					; we want to connect red (1) and blue (2)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_blue_purple:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ blue_purple
+	B wait_blue_purple
+
+	; transition to:	 	red: 100%		green: 0%		blue: 100%
+
+	; back to:	 			red: 100%		green: 0%		blue: 0%
+purple_red:
+	; first load the blue duty vale and compare to 1
+	LDR r3, ptr_blue_duty
+	LDR r1, [r3]
+	CMP r1, #1
+	BEQ red_yellow			; if 100 then branch to next segment
+	; else load the blue compare value here
+	SUB r2, r1, #1
+	STR r2, [r3]
+	MOV r0, #pwm3cmpa
+	BL set_pwm_compare
+	; connect PWM2
+	MOV r0, #pwm5en
+	MOV r1, #3					; we want to connect red (1) and blue (2)
+	BL connect_pwm_out
+	; enable red gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen2
+	BL enable_pwm_out
+	; enable green gen
+	MOV r1, #1
+	MOV r0, #pwmenablegen3
+	BL enable_pwm_out
+wait_purple_red:
+	; use a flag and the interrupt timer
+	LDRB r7, [r6]
+	CMP r7, #1
+	ITTT EQ
+	MOVEQ r7, #0
+	STRBEQ r7, [r6]
+	BEQ purple_red
+	B wait_purple_red
+	POP {r4-r8, lr}
+	MOV pc, lr
+
 ; *********** UART0 HANDLER ************ ;
 
 UART0_Handler:
@@ -698,6 +955,23 @@ UART0_Handler:
 
 done_UART:
 	POP {r4-r7}
+	BX lr       	; Return
+
+; ****************************** TIMER HANDLER *******************************;
+Timer_Handler:
+	PUSH {r4-r11}
+
+	; clear interrupt
+	LDR r4, base_timer_0					; store base address for UART0 into r0
+	LDR r5, [r4, #GPTMICR] 					; load what's in uarticr
+	ORR r5, r5, #0x1 						; set pin 0 to clear interrupt
+	STR r5, [r4, #GPTMICR]					; set the pins in memory
+
+	LDR r4, ptr_wheel_flag
+	MOV r5, #1
+	STRB r5, [r4]
+
+	POP {r4-r11}
 	BX lr       	; Return
 
 	.end
